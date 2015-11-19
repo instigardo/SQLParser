@@ -1,0 +1,35 @@
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','MAN')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','BAN')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','BILL_INV_SK')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','ITEM_ID')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','TAX_ENG_TYPE')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','JURIS_CODE')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','CRIR_IDN_CODE')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','CRIR_CAT')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','OOF_IND')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','BILL_GEO')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','FIN_GEO')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','SRC_SYS_ID')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','BILL_CYC_NUM')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','INV_YM')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','AR_COMP_CODE')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','TXN_COMP_CODE')
+insert into EDW_BASE.Hackathon_targetTB values('INSERT','6','EDW_TEMP','TMP_GEO_<SRC>','PRCS_CTRL_ID')
+
+BILL_GEO.MAN
+BILL_GEO.BAN
+BILL_GEO.BILL_INV_SK
+BILL_GEO.ITEM_ID
+BILL_GEO.TAX_ENG_TYPE
+BILL_GEO.JURIS_CODE
+BILL_GEO.CRIR_IDN_CODE
+BILL_GEO.CRIR_CAT
+BILL_GEO.OOF_IND
+BILL_GEO.BILLING_GEO
+FIFA-0 AS FIN_GEO
+BILL_GEO.SRC_SYS_ID
+BILL_GEO.BILL_CYC_NUM
+BILL_GEO.INV_YM
+FIFA-1 AS AR_COMP_CODE
+FIFA-2 AS TRANSACTION_COMP_CODE
+<CTRL>

@@ -1,0 +1,533 @@
+INSERT INTO EDW_TEMP.CONS_<src>
+   (
+    bill_date,
+    man,
+    orig_sys_id,
+    ent_code,
+    chrg_code,
+    ban,
+    inv_ym,
+    plug_amt
+   )
+  SELECT
+              COALESCE(SUMR.bill_Date,INTR.bill_date) as bill_date
+            , COALESCE(SUMR.man,INTR.man) as man
+            , COALESCE(SUMR.orig_sys_id,INTR.orig_sys_id) as orig_sys_id
+            , COALESCE(SUMR.ent_code,INTR.ent_code) as ent_code
+            , COALESCE(SUMR.chrg_code,INTR.intr_code) as chrg_code
+            , COALESCE(SUMR.ban,INTR.intr_ban) as ban
+			/* V14 Changes starts  */
+			--, COALESCE( CASE
+            --        WHEN CHARACTER_LENGTH(TRIM(EXTRACT(MONTH FROM SUMR.bill_date))) =1
+            --             THEN TRIM(EXTRACT(YEAR FROM SUMR.bill_date)) ||'0'|| TRIM(EXTRACT(MONTH FROM SUMR.bill_date))
+            --        ELSE TRIM(EXTRACT(YEAR FROM SUMR.bill_date)) || TRIM(EXTRACT(MONTH FROM SUMR.bill_date))
+            --        END ,
+            --            CASE
+            --        WHEN CHARACTER_LENGTH(TRIM(EXTRACT(MONTH FROM INTR.bill_date))) =1
+            --             THEN TRIM(EXTRACT(YEAR FROM INTR.bill_date)) ||'0'|| TRIM(EXTRACT(MONTH FROM INTR.bill_date))
+            --        ELSE TRIM(EXTRACT(YEAR FROM INTR.bill_date)) || TRIM(EXTRACT(MONTH FROM INTR.bill_date))
+            --        END) (INTEGER)   AS inv_ym
+			,<rev_year_month> AS INV_YM
+			/* V14 Changes end     */
+            , (COALESCE(SUMR.amt,0) - COALESCE(INTR.intr_amt,0)) AS plug_amt
+
+       FROM
+       (SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , chrg_code AS chrg_code
+             , ban
+             , SUM(chrg_amt) AS AMT
+            -- , ORIG.bill_cyc_date
+          FROM EDW_STG.VZ25RV_<src> R25
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R25.cap_id = CAP.cap_id
+           AND CAP.spcl_rev_orig_code <>'P'
+           AND R25.chrg_code  <>'0100'
+
+          JOIN (SELECT man, orig_sys_id --, bill_date AS bill_cyc_date
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON CAP.man=ORIG.man
+/**** V10 changes starts **/
+         
+          JOIN EDW_METADATA_VW.TRNFRM_RULE_VAL TRNFRM2
+	    ON TRNFRM2.rule_num = 65
+	   AND TRNFRM2.key_val_01 = ORIG.orig_sys_id
+	 
+         WHERE (TRNFRM2.ret_num,chrg_code) NOT IN 
+	(SELECT TRNFRM1.src_sys_num,TRNFRM1.key_val_01 
+	   FROM EDW_METADATA_VW.TRNFRM_RULE_VAL TRNFRM1         
+	 WHERE TRNFRM1.rule_num=396 GROUP BY 1,2)
+	   
+/**** V10 changes ends **/
+         GROUP BY 1,2,3,4,5,6 --,8
+/**** V11 changes starts **/         
+         UNION ALL
+         
+          SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , '0100' AS chrg_code
+             , ban
+             , SUM(chrg_amt) AS AMT
+
+          FROM EDW_STG.VZ25RV_<src> R25
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R25.cap_id = CAP.cap_id
+           AND CAP.spcl_rev_orig_code <>'P'
+           AND R25.chrg_code  <>'0100'
+
+          JOIN (SELECT man, orig_sys_id --, bill_date AS bill_cyc_date
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON CAP.man=ORIG.man
+
+          JOIN EDW_METADATA_VW.TRNFRM_RULE_VAL TRNFRM2
+	    ON TRNFRM2.rule_num = 65
+	   AND TRNFRM2.key_val_01 = ORIG.orig_sys_id
+	 
+         WHERE (TRNFRM2.ret_num,chrg_code) IN 
+	(SELECT TRNFRM1.src_sys_num,TRNFRM1.key_val_01 
+	   FROM EDW_METADATA_VW.TRNFRM_RULE_VAL TRNFRM1         
+	 WHERE TRNFRM1.rule_num=396 GROUP BY 1,2)
+	   
+         GROUP BY 1,2,3,4,5,6         
+/**** V11 changes ends **/                  
+       ) SUMR
+FULL OUTER JOIN
+       ( SELECT bill_date, man, orig_sys_id, ent_code, intr_code, intr_ban, sum(intr_amt) AS intr_amt--, bill_cyc_date
+       FROM
+       ( 
+           /**Fetch from 60R**/
+       
+               SELECT bill_date
+                    , REC60.man
+                    , orig_sys_id
+                    , ent_code
+                    , intr_code AS intr_code
+                    , intr_ban AS intr_ban
+                    , SUM(intr_amt) AS intr_amt
+                 
+                 FROM EDW_TEMP.TMP_RECON_EMI_R60_<src> REC60
+       
+                 JOIN (SELECT man--, bill_date AS bill_cyc_date
+       
+                         FROM EDW_STG.VZ00R_<src> R00
+       
+                         JOIN EDW_STG.VZCAP_<src> CAP
+                           ON R00.cap_id = CAP.cap_id
+                           GROUP BY 1
+                      ) ORIG
+                   ON REC60.man = ORIG.man
+       
+                GROUP BY 1,2,3,4,5,6
+       UNION ALL
+
+       
+       /**Fetch from 70R**/
+        SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , CAP.assc_chrg_code AS intr_code
+             , ban AS intr_ban
+             , SUM(amt_cur) AS intr_amt
+             --, ORIG.bill_cyc_date
+
+          FROM EDW_STG.VZ70R_<src> R70
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R70.cap_id = CAP.cap_id
+           AND R70.dmy_ind <>'D'
+           AND CAP.assc_chrg_code <>'0100'
+           AND CAP.spcl_rev_orig_code <>'P'
+
+          JOIN (SELECT man, orig_sys_id--, bill_date AS bill_cyc_date
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON CAP.man=ORIG.man
+
+	LEFT JOIN  EDW_METADATA_VW.TRNFRM_RULE_VAL  TRV384
+	       ON TRV384.src_sys_num = <sys>
+	      AND CAP.spcl_rec_type_code = TRV384.key_val_01
+	      AND 'R70' = TRV384.key_val_02
+	      AND R70.amt_cur <>  TRV384.key_val_03
+	      AND TRV384.rule_num = 384
+	      
+          WHERE COALESCE(TRV384.ret_val,'LOAD') <> 'FILTER'
+	    AND NOT EXISTS
+	  	(SELECT A.*
+	  	   FROM EDW_TEMP.PLUG_AMT_<src> A
+	  	 WHERE A.prc_plan_code = CAP.prc_plan_code
+	  	   AND A.man = CAP.man
+	  	   AND A.ban = CAP.ban
+	  	   AND A.chrg_code = CAP.assc_chrg_code
+	  	   AND A.ent_code = CAP.ent_code
+	           AND A.bill_date = CAP.bill_date)
+
+         GROUP BY 1,2,3,4,5,6--,8
+
+UNION ALL
+    /**Fetch from 65R**/
+
+        SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , CAP.assc_chrg_code AS intr_code
+             , ban AS intr_ban
+             , SUM(bill_amt) AS intr_amt
+             --, ORIG.bill_cyc_date
+
+          FROM EDW_STG.VZ65R_<src> R65
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R65.cap_id = CAP.cap_id
+           AND R65.dummy_rec_ind <>'D'
+           AND CAP.assc_chrg_code  <>'0100'
+           AND CAP.spcl_rev_orig_code <>'P'
+
+          JOIN (SELECT man, orig_sys_id --, bill_date AS bill_cyc_date
+                 FROM EDW_STG.VZ00R_<src> R00
+
+                 JOIN EDW_STG.VZCAP_<src> CAP
+                   ON R00.cap_id = CAP.cap_id
+                   GROUP BY 1,2
+               ) ORIG
+            ON CAP.man=ORIG.man
+
+         LEFT JOIN  EDW_METADATA_VW.TRNFRM_RULE_VAL  TRV384
+           ON TRV384.src_sys_num = <sys>
+          AND CAP.spcl_rec_type_code = TRV384.key_val_01
+          AND 'R65' = TRV384.key_val_02
+          AND R65.bill_amt <>  TRV384.key_val_03
+          AND TRV384.rule_num = 384
+          
+          WHERE COALESCE(TRV384.ret_val,'LOAD') <> 'FILTER'
+	    AND NOT EXISTS
+	       (SELECT A.*
+	          FROM EDW_TEMP.PLUG_AMT_<src> A
+	         WHERE A.prc_plan_code = CAP.prc_plan_code
+	           AND A.man = CAP.man
+	           AND A.ban = CAP.ban
+	           AND A.chrg_code = CAP.assc_chrg_code
+	           AND A.ent_code = CAP.ent_code
+                   AND A.bill_date = CAP.bill_date)
+
+         GROUP BY 1,2,3,4,5,6--,8
+
+UNION ALL
+    /**Fetch from TMP_USG**/
+
+        SELECT TMP_USG.bill_date
+             , TMP_USG.man
+             , ORIG.orig_sys_id
+             , TMP_USG.ent_code
+             , TMP_USG.assc_chrg_code AS intr_code
+             , TMP_USG.ban AS intr_ban
+             , SUM(TMP_USG.chrg_amt) AS intr_amt
+             --, bill_cyc_date
+
+          FROM EDW_TEMP.TMP_USAGE_REC_<src> TMP_USG
+
+
+          JOIN (SELECT man, orig_sys_id--, bill_date AS bill_cyc_date
+
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON TMP_USG.man= ORIG.man
+
+         WHERE TMP_USG.assc_chrg_code <> '0100'
+           AND NOT EXISTS
+               (SELECT A.*
+                  FROM EDW_TEMP.PLUG_AMT_<src> A
+                 WHERE A.prc_plan_code = TMP_USG.prc_plan_code
+                   AND A.man = TMP_USG.man
+                   AND A.ban = TMP_USG.ban
+                   AND A.chrg_code = TMP_USG.assc_chrg_code
+                   AND A.ent_code = TMP_USG.ent_code
+                   AND A.bill_date = TMP_USG.bill_date)
+
+         GROUP BY 1,2,3,4,5,6--,8
+
+UNION ALL
+    
+    /**Fetch from 67R**/
+
+        SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , CAP.assc_chrg_code AS intr_code
+             , ban AS intr_ban
+             , SUM(dcnt_promo_save_amt) AS intr_amt
+             --, bill_cyc_date
+
+          FROM EDW_STG.VZ67R_<src> R67
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R67.cap_id = CAP.cap_id
+           AND CAP.assc_chrg_code <>'0100'
+           AND CAP.spcl_rev_orig_code <>'P'
+
+          JOIN (SELECT man, orig_sys_id--, bill_date AS bill_cyc_date
+
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON CAP.man= ORIG.man
+
+         WHERE
+    NOT EXISTS
+               (SELECT A.*
+                  FROM EDW_TEMP.PLUG_AMT_<src> A
+                 WHERE A.prc_plan_code = CAP.prc_plan_code
+                   AND A.man = CAP.man
+                   AND A.ban = CAP.ban
+                   AND A.chrg_code = CAP.assc_chrg_code
+                   AND A.ent_code = CAP.ent_code
+                   AND A.bill_date = CAP.bill_date)
+
+         GROUP BY 1,2,3,4,5,6--,8
+UNION ALL   
+
+/**** 37R details  ***/
+
+        SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , CAP.assc_chrg_code AS intr_code
+             , ban AS intr_ban
+             , SUM(usg_amnt) AS intr_amt
+             --, ORIG.bill_cyc_date
+
+          FROM EDW_STG.VZ37R_<src> R37
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R37.cap_id = CAP.cap_id
+           AND CAP.assc_chrg_code  <>'0100'
+           AND CAP.spcl_rev_orig_code <>'P'
+           AND R37.inc_code = '20'
+        AND R37.lvl_code = '1' 
+          JOIN (SELECT man, orig_sys_id--, bill_date AS bill_cyc_date
+                 FROM EDW_STG.VZ00R_<src> R00
+
+                 JOIN EDW_STG.VZCAP_<src> CAP
+                   ON R00.cap_id = CAP.cap_id
+                   GROUP BY 1,2
+               ) ORIG
+            ON CAP.man=ORIG.man
+
+         GROUP BY 1,2,3,4,5,6--,8
+
+UNION ALL
+
+    /**** V12 changes starts **/
+    /**** Fetch from EMIs **/
+    
+        SELECT   bill_date
+		,man
+		,orig_sys_id
+		,ent_code
+		,chrg_code AS intr_code
+		,ban AS intr_ban
+		,chrg_amt AS intr_amt
+		
+        FROM EDW_TEMP.TMP_INTR_CONS_<src>
+    
+    /**** V12 changes Ends **/
+
+UNION ALL         
+         
+/**** V9 changes starts **/
+
+/******** 25R details for charge code 1500 and 1510 ***/
+
+        SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , R25.chrg_code AS intr_code          
+             , ban AS intr_ban
+             , SUM(chrg_amt) AS intr_amt
+  
+          FROM EDW_STG.VZ25RV_<src> R25
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R25.cap_id = CAP.cap_id
+           AND CAP.spcl_rev_orig_code <>'P'
+
+	  JOIN EDW_METADATA_VW.TRNFRM_RULE_VAL TRV398
+	    ON TRV398.rule_num = 398
+	   AND TRV398.key_val_01 = R25.chrg_code 
+
+          JOIN (SELECT man, orig_sys_id --, bill_date AS bill_cyc_date
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON CAP.man=ORIG.man
+
+         WHERE
+    NOT EXISTS
+               (SELECT A.*
+                  FROM EDW_TEMP.PLUG_AMT_<src> A
+                 WHERE A.prc_plan_code = CAP.prc_plan_code
+                   AND A.man = CAP.man
+                   AND A.ban = CAP.ban
+                   AND A.chrg_code = CAP.assc_chrg_code
+                   AND A.ent_code = CAP.ent_code
+                   AND A.bill_date = CAP.bill_date)
+
+         GROUP BY 1,2,3,4,5,6 
+
+UNION ALL
+/******** 25R details for charge code 0510 and ent_code <> 09304 ***/
+
+        SELECT CAP.bill_date
+             , CAP.man
+             , ORIG.orig_sys_id
+             , CAP.ent_code
+             , R25.chrg_code AS intr_code
+             , ban AS intr_ban
+             , SUM(chrg_amt) AS intr_amt
+  
+          FROM EDW_STG.VZ25RV_<src> R25
+
+          JOIN EDW_STG.VZCAP_<src> CAP
+            ON R25.cap_id = CAP.cap_id
+           AND CAP.spcl_rev_orig_code <>'P'
+
+          JOIN EDW_METADATA_VW.TRNFRM_RULE_VAL CHRG_NUM_RULE
+            ON CHRG_NUM_RULE.rule_num = 399
+           AND CHRG_NUM_RULE.key_val_01 = R25.chrg_code   
+           AND CAP.ent_code NOT IN (SELECT key_val_01 from EDW_METADATA_VW.TRNFRM_RULE_VAL where rule_num = 602 and src_sys_num = <sys>  ) /**** V12 changes ****/
+           AND CHRG_NUM_RULE.src_sys_num = <sys>           
+
+          JOIN (SELECT man, orig_sys_id --, bill_date AS bill_cyc_date
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON CAP.man=ORIG.man
+
+         WHERE
+    NOT EXISTS
+               (SELECT A.*
+                  FROM EDW_TEMP.PLUG_AMT_<src> A
+                 WHERE A.prc_plan_code = CAP.prc_plan_code
+                   AND A.man = CAP.man
+                   AND A.ban = CAP.ban
+                   AND A.chrg_code = CAP.assc_chrg_code
+                   AND A.ent_code = CAP.ent_code
+                   AND A.bill_date = CAP.bill_date)
+
+         GROUP BY 1,2,3,4,5,6 
+ /**** V9 changes ends **/   
+ 
+ /**** V11 changes starts **/
+  
+  UNION ALL    
+  
+  SELECT          CAP.bill_date
+                , CAP.man
+                , ORIG.orig_sys_id AS orig_sys_id
+                , CAP.ent_code AS ent_code
+                , CASE WHEN TRV635.ret_val IS NOT NULL THEN TRV635.ret_val /**V12 Change**/
+                       ELSE '0100'
+                  END AS intr_code
+                , ban AS intr_ban  
+                , SUM(tax_amt) AS intr_amt
+                
+             FROM EDW_STG.VZ32SV_<SRC> S32
+             
+             JOIN EDW_STG.VZCAP_<SRC> CAP
+               ON S32.cap_id = CAP.cap_id
+              AND CAP.spcl_rev_orig_code <> 'P'
+              AND CAP.assc_chrg_code  <>'0100'
+              AND CAP.rec_num = 25
+              
+             JOIN (SEL man,orig_sys_id
+                   FROM EDW_STG.VZ00R_<src> R00
+                   JOIN EDW_STG.VZCAP_<src> cap
+                     ON R00.cap_id = cap.cap_id
+                     GROUP BY 1,2
+                  ) ORIG
+               ON CAP.man= ORIG.man
+               
+            /**V12 Change Starts Here**/
+            
+            LEFT JOIN EDW_METADATA_VW.TRNFRM_RULE_VAL TRV635
+              ON TRV635.rule_num = 635
+             AND TRV635.key_val_01 = CAP.ent_code
+             
+             /**V12 Change Ends Here**/               
+  
+           GROUP BY 1,2,3,4,5,6
+/**** V11 changes ends **/  
+ 
+UNION ALL
+    /**Fetch from Plug_Amt**/
+
+        SELECT PLUG.bill_date
+             , PLUG.man
+             , ORIG.orig_sys_id
+             , PLUG.ent_code
+             , PLUG.chrg_code AS intr_code
+             , PLUG.ban AS intr_ban
+             , SUM(diff_amt) AS intr_amt
+             --, bill_cyc_date
+
+          FROM EDW_TEMP.PLUG_AMT_<src> PLUG
+
+          JOIN (SELECT man, orig_sys_id--, bill_date AS bill_cyc_date
+                  FROM EDW_STG.VZ00R_<src> R00
+
+                  JOIN EDW_STG.VZCAP_<src> CAP
+                    ON R00.cap_id = CAP.cap_id
+                    GROUP BY 1,2
+               ) ORIG
+            ON PLUG.man = ORIG.man
+
+         WHERE PLUG.diff_amt <> 0
+         GROUP BY 1,2,3,4,5,6--,8
+   ) X
+   GROUP BY 1,2,3,4,5,6--,8
+       ) INTR
+    ON SUMR.chrg_code = INTR.intr_code
+   AND SUMR.ban = INTR_ban
+   AND SUMR.orig_sys_id= INTR.orig_sys_id
+   AND SUMR.ent_code=INTR.ent_code
+   AND SUMR.man = INTR.man
+   AND SUMR.bill_date =INTR.bill_date
+   GROUP BY    1,2,3,4,5,6,7,8
+   ;

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="C:/Users/saxenhi/Downloads/poi-bin-3.13-20150929/poi-3.13/poi-3.13-20150929.jar"/>
+	<classpathentry kind="lib" path="C:/Users/saxenhi/Downloads/poi-bin-3.13-20150929/poi-3.13/poi-ooxml-3.13-20150929.jar"/>
+	<classpathentry kind="lib" path="C:/tools/Tearadata - 14.10/TeraJDBC/terajdbc4.jar"/>
+	<classpathentry kind="lib" path="C:/tools/Tearadata - 14.10/TeraJDBC/tdgssconfig.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
